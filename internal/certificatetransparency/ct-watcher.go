@@ -7,6 +7,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -278,7 +280,7 @@ func (w *worker) runWorker(ctx context.Context) error {
 	certScanner := scanner.NewScanner(jsonClient, scanner.ScannerOptions{
 		FetcherOptions: scanner.FetcherOptions{
 			BatchSize:     100,
-			ParallelFetch: 1,
+			ParallelFetch: 100,
 			StartIndex:    int64(sth.TreeSize), // Start at the latest STH to skip all the past certificates
 			Continuous:    true,
 		},
@@ -327,6 +329,8 @@ func (w *worker) foundPrecertCallback(rawEntry *ct.RawLogEntry) {
 	atomic.AddInt64(&processedPrecerts, 1)
 }
 
+var curEntries []string
+
 // certHandler takes the entries out of the entryChan channel and broadcasts them to all clients.
 // Only a single instance of the certHandler runs per certstream server.
 func certHandler(entryChan chan certstream.Entry) {
@@ -337,11 +341,12 @@ func certHandler(entryChan chan certstream.Entry) {
 		processed++
 
 		if processed%1000 == 0 {
+			saveCurEntries()
 			log.Printf("Processed %d entries | Queue length: %d\n", processed, len(entryChan))
 			// Every thousandth entry, we store one certificate as example
 			web.SetExampleCert(entry)
 		}
-
+		curEntries = append(curEntries, string(entry.JSON()))
 		// Run json encoding in the background and send the result to the clients.
 		web.ClientHandler.Broadcast <- entry
 
@@ -350,6 +355,37 @@ func certHandler(entryChan chan certstream.Entry) {
 
 		metrics.Inc(operator, url)
 	}
+}
+
+func saveCurEntries() {
+	tm := time.Now().Unix()
+	dir := "./data/" + strconv.FormatInt(tm/1000, 10)
+	_, err := os.Stat(dir)
+	if err != nil {
+		err = os.MkdirAll(dir, os.ModePerm)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+	dataStr := "[" + strings.Join(curEntries, ",") + "]"
+	f, err := os.Create(dir + "/" + strconv.FormatInt(time.Now().Unix(), 10) + ".json")
+	if err != nil {
+		log.Fatal(err)
+	}
+	_, err = f.WriteString(dataStr)
+	if err != nil {
+		err = f.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Fatal(err)
+	}
+	f.Sync()
+	err = f.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+	curEntries = []string{}
 }
 
 // getAllLogs returns a list of all CT logs.
