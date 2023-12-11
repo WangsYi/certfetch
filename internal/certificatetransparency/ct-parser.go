@@ -38,6 +38,7 @@ func parseData(entry *ct.RawLogEntry, operatorName, logName, ctURL string) (cert
 		},
 		UpdateType: "X509LogEntry",
 	}
+	return data, nil
 
 	// Convert RawLogEntry to ct.LogEntry
 	logEntry, conversionErr := entry.ToLogEntry()
