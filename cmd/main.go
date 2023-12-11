@@ -4,6 +4,9 @@ import (
 	"flag"
 	"log"
 
+	"net/http"
+	_ "net/http/pprof"
+
 	"github.com/d-Rickyy-b/certstream-server-go/internal/certificatetransparency"
 	"github.com/d-Rickyy-b/certstream-server-go/internal/config"
 	"github.com/d-Rickyy-b/certstream-server-go/internal/prometheus"
@@ -29,7 +32,9 @@ func main() {
 	go webserver.Start()
 
 	watcher := certificatetransparency.Watcher{}
-	watcher.Start()
+	go watcher.Start()
+
+	http.ListenAndServe("0.0.0.0:6060", nil)
 }
 
 func setupMetrics(conf config.Config, webserver *web.WebServer) {

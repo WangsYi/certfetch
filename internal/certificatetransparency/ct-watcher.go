@@ -279,8 +279,8 @@ func (w *worker) runWorker(ctx context.Context) error {
 
 	certScanner := scanner.NewScanner(jsonClient, scanner.ScannerOptions{
 		FetcherOptions: scanner.FetcherOptions{
-			BatchSize:     100,
-			ParallelFetch: 1,
+			BatchSize:     1000,
+			ParallelFetch: 50,
 			StartIndex:    int64(sth.TreeSize), // Start at the latest STH to skip all the past certificates
 			Continuous:    true,
 		},
@@ -341,12 +341,12 @@ func certHandler(entryChan chan certstream.Entry) {
 		processed++
 
 		if processed%1000 == 0 {
-			saveCurEntries()
+			// saveCurEntries()
 			log.Printf("Processed %d entries | Queue length: %d\n", processed, len(entryChan))
 			// Every thousandth entry, we store one certificate as example
 			web.SetExampleCert(entry)
 		}
-		curEntries = append(curEntries, string(entry.JSON()))
+		// curEntries = append(curEntries, string(entry.JSON()))
 		// Run json encoding in the background and send the result to the clients.
 		web.ClientHandler.Broadcast <- entry
 
