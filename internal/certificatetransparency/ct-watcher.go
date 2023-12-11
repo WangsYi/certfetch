@@ -255,6 +255,7 @@ func (w *worker) startDownloadingCerts(ctx context.Context) {
 			log.Println("Sleeping for 5 seconds")
 			time.Sleep(5 * time.Second)
 			log.Printf("Restarting worker for '%s'\n", w.ctURL)
+
 			continue
 		}
 	}
@@ -391,7 +392,7 @@ func saveCurEntries() {
 // getAllLogs returns a list of all CT logs.
 func getAllLogs() (loglist3.LogList, error) {
 	// Download the list of all logs from ctLogInfo and decode json
-	resp, err := http.Get(loglist3.LogListURL)
+	resp, err := http.Get(loglist3.AllLogListURL)
 	if err != nil {
 		return loglist3.LogList{}, err
 	}
