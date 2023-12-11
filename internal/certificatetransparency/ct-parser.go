@@ -400,9 +400,7 @@ var count int
 
 // parseCertstreamEntry creates an Entry from a ct.RawLogEntry.
 func parseCertstreamEntry(rawEntry *ct.RawLogEntry, operatorName, logname, ctURL string) (certstream.Entry, error) {
-	count++
-	fmt.Println(rawEntry.Index, count)
-	return certstream.Entry{}, nil
+	// return certstream.Entry{}, nil
 	if rawEntry == nil {
 		return certstream.Entry{}, errors.New("certstream entry is nil")
 	}
