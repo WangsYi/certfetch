@@ -297,7 +297,7 @@ func (w *worker) runWorker(ctx context.Context) error {
 		},
 		Matcher:     scanner.MatchAll{},
 		PrecertOnly: false,
-		NumWorkers:  8,
+		NumWorkers:  32,
 		BufferSize:  1000,
 	})
 
