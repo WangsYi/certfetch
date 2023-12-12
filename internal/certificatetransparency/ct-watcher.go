@@ -287,6 +287,7 @@ func (w *worker) runWorker(ctx context.Context) error {
 		}
 		startIdx = process
 	}
+	log.Printf("[%s] start from index: %d", w.name, startIdx)
 	certScanner := scanner.NewScanner(jsonClient, scanner.ScannerOptions{
 		FetcherOptions: scanner.FetcherOptions{
 			BatchSize:     1000,
