@@ -228,9 +228,17 @@ func (w *worker) startDownloadingCerts(ctx context.Context) {
 
 	w.running = true
 	w.mu.Unlock()
-
+	endIndex := 0
+	batch := 1000
 	for {
-		workerErr := w.runWorker(ctx)
+		lastStart, workerErr := w.runWorker(ctx, uint64(endIndex), batch)
+		if lastStart == 0 {
+			log.Printf("Worker for '%s' complete\n", w.ctURL)
+			return
+		}
+		endIndex = int(lastStart - 1)
+		if endIndex == 0 {
+		}
 		if workerErr != nil {
 			if errors.Is(workerErr, errFetchingSTHFailed) {
 				log.Printf("Worker for '%s' failed - could not fetch STH\n", w.ctURL)
@@ -262,28 +270,39 @@ func (w *worker) startDownloadingCerts(ctx context.Context) {
 }
 
 // runWorker runs a single worker for a single CT log. This method is blocking.
-func (w *worker) runWorker(ctx context.Context) error {
+func (w *worker) runWorker(ctx context.Context, endIndex uint64, batch int) (uint64, error) {
 	userAgent := fmt.Sprintf("Certstream Server v%s (github.com/d-Rickyy-b/certstream-server-go)", config.Version)
 
 	hc := http.Client{Timeout: 5 * time.Second}
 	jsonClient, e := client.New(w.ctURL, &hc, jsonclient.Options{UserAgent: userAgent})
 	if e != nil {
 		log.Printf("Error creating JSON client: %s\n", e)
-		return errCreatingClient
+		return 0, errCreatingClient
 	}
 
 	sth, getSTHerr := jsonClient.GetSTH(ctx)
 	if getSTHerr != nil {
 		log.Printf("Could not get STH for '%s': %s\n", w.ctURL, getSTHerr)
-		return errFetchingSTHFailed
+		return 0, errFetchingSTHFailed
 	}
-
+	fmt.Println(w.name, " tree size: ", sth.TreeSize)
+	if endIndex == 0 {
+		endIndex = sth.TreeSize / 2
+	}
+	startIndex := endIndex
+	if endIndex > uint64(batch) {
+		startIndex = endIndex - uint64(batch)
+	} else {
+		startIndex = 0
+	}
+	fmt.Println(w.name, " end index: ", endIndex, " start index: ", startIndex)
 	certScanner := scanner.NewScanner(jsonClient, scanner.ScannerOptions{
 		FetcherOptions: scanner.FetcherOptions{
 			BatchSize:     1000,
-			ParallelFetch: 10,
-			StartIndex:    int64(sth.TreeSize), // Start at the latest STH to skip all the past certificates
-			Continuous:    true,
+			ParallelFetch: 1,
+			StartIndex:    int64(startIndex), // Start at the latest STH to skip all the past certificates
+			EndIndex:      int64(endIndex),
+			Continuous:    false,
 		},
 		Matcher:     scanner.MatchAll{},
 		PrecertOnly: false,
@@ -294,12 +313,12 @@ func (w *worker) runWorker(ctx context.Context) error {
 	scanErr := certScanner.Scan(ctx, w.foundCertCallback, w.foundPrecertCallback)
 	if scanErr != nil {
 		log.Println("Scan error: ", scanErr)
-		return scanErr
+		return startIndex, scanErr
 	}
-
+	ctx = context.WithValue(ctx, "curIndex", sth.TreeSize)
 	log.Println("No error from certScanner!")
 
-	return nil
+	return startIndex, nil
 }
 
 // foundCertCallback is the callback that handles cases where new regular certs are found.
@@ -342,12 +361,12 @@ func certHandler(entryChan chan certstream.Entry) {
 		processed++
 
 		if processed%1000 == 0 {
-			// saveCurEntries()
+			saveCurEntries()
 			log.Printf("Processed %d entries | Queue length: %d\n", processed, len(entryChan))
 			// Every thousandth entry, we store one certificate as example
 			web.SetExampleCert(entry)
 		}
-		// curEntries = append(curEntries, string(entry.JSON()))
+		curEntries = append(curEntries, string(entry.JSON()))
 		// Run json encoding in the background and send the result to the clients.
 		web.ClientHandler.Broadcast <- entry
 
@@ -392,7 +411,7 @@ func saveCurEntries() {
 // getAllLogs returns a list of all CT logs.
 func getAllLogs() (loglist3.LogList, error) {
 	// Download the list of all logs from ctLogInfo and decode json
-	resp, err := http.Get(loglist3.AllLogListURL)
+	resp, err := http.Get(loglist3.LogListURL)
 	if err != nil {
 		return loglist3.LogList{}, err
 	}
