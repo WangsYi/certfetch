@@ -289,14 +289,14 @@ func (w *worker) runWorker(ctx context.Context) error {
 	}
 	certScanner := scanner.NewScanner(jsonClient, scanner.ScannerOptions{
 		FetcherOptions: scanner.FetcherOptions{
-			BatchSize:     50,
+			BatchSize:     1000,
 			ParallelFetch: 1,
 			StartIndex:    startIdx, // Start at the latest STH to skip all the past certificates
 			Continuous:    true,
 		},
 		Matcher:     scanner.MatchAll{},
 		PrecertOnly: false,
-		NumWorkers:  1,
+		NumWorkers:  4,
 		BufferSize:  1000,
 	})
 
