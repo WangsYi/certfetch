@@ -6,6 +6,7 @@ import (
 
 	"github.com/d-Rickyy-b/certstream-server-go/internal/certificatetransparency"
 	"github.com/d-Rickyy-b/certstream-server-go/internal/config"
+	"github.com/d-Rickyy-b/certstream-server-go/internal/db"
 	"github.com/d-Rickyy-b/certstream-server-go/internal/prometheus"
 	"github.com/d-Rickyy-b/certstream-server-go/internal/web"
 )
@@ -16,20 +17,19 @@ func main() {
 	flag.Parse()
 
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
-
+	db.InitDB()
 	conf, err := config.ReadConfig(*configFile)
 	if err != nil {
 		log.Fatalln("Error while parsing yaml file:", err)
 	}
-
-	webserver := web.NewWebsocketServer(conf.Webserver.ListenAddr, conf.Webserver.ListenPort, conf.Webserver.CertPath, conf.Webserver.CertKeyPath)
-
-	setupMetrics(conf, webserver)
-
-	go webserver.Start()
-
-	watcher := certificatetransparency.Watcher{}
+	watcher := certificatetransparency.Watcher{Type: conf.Watcher.Type}
 	watcher.Start()
+	// webserver := web.NewWebsocketServer(conf.Webserver.ListenAddr, conf.Webserver.ListenPort, conf.Webserver.CertPath, conf.Webserver.CertKeyPath)
+
+	// setupMetrics(conf, webserver)
+
+	// go webserver.Start()
+
 }
 
 func setupMetrics(conf config.Config, webserver *web.WebServer) {

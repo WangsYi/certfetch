@@ -22,6 +22,7 @@ go.work
 .cache
 *.pprof
 dist/
+data/
 
 # Ignore actual config files
 config.yaml

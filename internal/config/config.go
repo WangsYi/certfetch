@@ -24,6 +24,9 @@ type ServerConfig struct {
 }
 
 type Config struct {
+	Watcher struct {
+		Type string `yaml:"type"` // "realtime" or "history"
+	}
 	Webserver struct {
 		ServerConfig   `yaml:",inline"`
 		FullURL        string `yaml:"full_url"`

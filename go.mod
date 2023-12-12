@@ -13,7 +13,9 @@ require (
 require (
 	github.com/go-logr/logr v1.3.0 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
+	github.com/golang/snappy v0.0.0-20180518054509-2e65f85255db // indirect
 	github.com/google/trillian v1.5.3 // indirect
+	github.com/syndtr/goleveldb v1.0.0 // indirect
 	github.com/valyala/fastrand v1.1.0 // indirect
 	github.com/valyala/histogram v1.2.0 // indirect
 	golang.org/x/crypto v0.15.0 // indirect

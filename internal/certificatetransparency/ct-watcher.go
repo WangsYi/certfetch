@@ -3,7 +3,6 @@ package certificatetransparency
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -15,7 +14,7 @@ import (
 	"time"
 
 	"github.com/d-Rickyy-b/certstream-server-go/internal/certstream"
-	"github.com/d-Rickyy-b/certstream-server-go/internal/config"
+	"github.com/d-Rickyy-b/certstream-server-go/internal/db"
 	"github.com/d-Rickyy-b/certstream-server-go/internal/web"
 
 	ct "github.com/google/certificate-transparency-go"
@@ -145,6 +144,7 @@ func GetLogOperators() map[string][]string {
 // Watcher describes a component that watches for new certificates in a CT log.
 type Watcher struct {
 	Name       string
+	Type       string // "realtime" or "history"
 	workers    []*worker
 	cancelFunc context.CancelFunc
 }
@@ -173,6 +173,7 @@ func (w *Watcher) Start() {
 				operatorName: operator.Name,
 				ctURL:        transparencyLog.URL,
 				entryChan:    certChan,
+				watcher:      w,
 			}
 			w.workers = append(w.workers, &ctWorker)
 
@@ -205,6 +206,7 @@ type worker struct {
 	entryChan    chan certstream.Entry
 	mu           sync.Mutex
 	running      bool
+	watcher      *Watcher
 }
 
 // startDownloadingCerts starts downloading certificates from the CT log. This method is blocking.
@@ -262,9 +264,9 @@ func (w *worker) startDownloadingCerts(ctx context.Context) {
 
 // runWorker runs a single worker for a single CT log. This method is blocking.
 func (w *worker) runWorker(ctx context.Context) error {
-	userAgent := fmt.Sprintf("Certstream Server v%s (github.com/d-Rickyy-b/certstream-server-go)", config.Version)
-
-	hc := http.Client{Timeout: 5 * time.Second}
+	// userAgent := fmt.Sprintf("Certstream Server v%s (github.com/d-Rickyy-b/certstream-server-go)", config.Version)
+	userAgent := "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.150 Safari/537.36"
+	hc := http.Client{Timeout: 60 * time.Second}
 	jsonClient, e := client.New(w.ctURL, &hc, jsonclient.Options{UserAgent: userAgent})
 	if e != nil {
 		log.Printf("Error creating JSON client: %s\n", e)
@@ -276,12 +278,20 @@ func (w *worker) runWorker(ctx context.Context) error {
 		log.Printf("Could not get STH for '%s': %s\n", w.ctURL, getSTHerr)
 		return errFetchingSTHFailed
 	}
-
+	startIdx := int64(sth.TreeSize)
+	if w.watcher.Type == "history" {
+		process, err := db.GetProcess(w.name)
+		if err != nil {
+			log.Printf("cannot get process of %s, err: %v, start from 0\n", w.name, err)
+			startIdx = 0
+		}
+		startIdx = process
+	}
 	certScanner := scanner.NewScanner(jsonClient, scanner.ScannerOptions{
 		FetcherOptions: scanner.FetcherOptions{
-			BatchSize:     100,
+			BatchSize:     50,
 			ParallelFetch: 1,
-			StartIndex:    int64(sth.TreeSize), // Start at the latest STH to skip all the past certificates
+			StartIndex:    startIdx, // Start at the latest STH to skip all the past certificates
 			Continuous:    true,
 		},
 		Matcher:     scanner.MatchAll{},
@@ -325,6 +335,17 @@ func (w *worker) foundPrecertCallback(rawEntry *ct.RawLogEntry) {
 
 	entry.Data.UpdateType = "PrecertLogEntry"
 	w.entryChan <- entry
+	idx, err := db.GetProcess(w.name)
+	if err != nil {
+		log.Printf("cannot get process of %s, err:%v", w.name, err)
+	}
+
+	if idx < entry.Data.CertIndex {
+		err = db.SetProcess(w.name, entry.Data.CertIndex)
+		if err != nil {
+			log.Printf("cannot set process of %s, err:%v", w.name, err)
+		}
+	}
 
 	atomic.AddInt64(&processedPrecerts, 1)
 }
@@ -348,7 +369,7 @@ func certHandler(entryChan chan certstream.Entry) {
 		}
 		curEntries = append(curEntries, string(entry.JSON()))
 		// Run json encoding in the background and send the result to the clients.
-		web.ClientHandler.Broadcast <- entry
+		//web.ClientHandler.Broadcast <- entry
 
 		url := entry.Data.Source.NormalizedURL
 		operator := entry.Data.Source.Operator
