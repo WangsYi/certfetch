@@ -390,7 +390,7 @@ func saveCurEntries() {
 		}
 	}
 	dataStr := "[" + strings.Join(curEntries, ",") + "]"
-	f, err := os.Create(dir + "/" + strconv.FormatInt(time.Now().Unix(), 10) + ".json")
+	f, err := os.Create(dir + "/" + strconv.FormatInt(time.Now().UnixNano(), 10) + ".json")
 	if err != nil {
 		log.Fatal(err)
 	}
